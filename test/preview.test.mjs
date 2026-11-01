@@ -50,7 +50,7 @@ test('削除・再変換で対象のPCMとBlobを解放し、他パターンと�
     let finish, submit, pauses = 0, clears = 0;
     const graph = { generation: 0, cancelAnalysis: ComparisonGraph.prototype.cancelAnalysis };
     const instance = { source: {}, rate: 48000, totalFrames: 60 * 48000, revision: 0, context: {}, playing: false, canEncode: true,
-      frame: 0, cache: [], target: { key: 'reference' }, analysisChunk: () => null, keepReference() {} };
+      frame: 0, cache: [], target: { key: 'reference' }, analysisChunk: () => null, keepReference() {}, forget() {} };
     const scope = vm.createContext({ source: instance.source, player: instance, graph, encoder: null, encoding: false, graphBusy: false, graphDecoder: null,
       graphChunks: [other], graphDecodeCost: 0, performance, patterns: [removed], editing: mode === 'edit' ? removed : null,
       playback: { selected: mode === 'edit' ? 'old' : 'reference' }, draft: removed.config, validateConfig,

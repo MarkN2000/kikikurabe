@@ -102,3 +102,92 @@ test('整数PCMとFLACの安全な条件だけ量子化を省き、実WASMの全
     core.FS.unlink(path);
   }
 });
+
+test('往復切替・比較相手の先読みを共有し、低速復号でも切替を繰り返し見送らない', async () => {
+  let now = 0, cost = 0, calls = [], finish;
+  const context = { sampleRate: 48000, get currentTime() { return now; }, destination: {}, resume: async () => {}, close() {},
+    createGain: () => ({ connect() {}, disconnect() {}, gain: { value: 1, cancelScheduledValues() {}, setValueAtTime() {}, linearRampToValueAtTime() {} } }),
+    createBufferSource: () => ({ connect() {}, disconnect() {}, start() {}, stop() {} }) };
+  const player = new Player(() => {}, error => { throw error; }); clearInterval(player.timer);
+  const source = { rate: 48000, channels: 2, duration: 180, file: {} };
+  const opus = { id: 'opus', blob: {}, config: { codec: 'opus', rate: 48000, channels: 2 } };
+  const mp3 = { id: 'mp3', blob: {}, config: { codec: 'mp3', rate: 48000, channels: 2 } };
+  const decode = async (_, target, start, frames) => {
+    calls.push({ key: target.key, start: start / 48000, seconds: frames / 48000 }); now += cost; return {};
+  };
+  const reset = async () => { player.comparisonTargets = []; player.pause(); await new Promise(setImmediate); now = cost = 0; player.setSource(source); player.context = context; player.engine.decode = decode; calls = []; };
+  const settle = () => new Promise(setImmediate);
+  const clock = Object.getOwnPropertyDescriptor(performance, 'now');
+  Object.defineProperty(performance, 'now', { configurable: true, value: () => now * 1000 });
+  try {
+    await reset();
+    player.select(opus); await player.decode(player.target, 0, player.revision, 4);
+    player.select(null); await player.decode(player.target, 0, player.revision, 4);
+    player.select(opus); await player.decode(player.target, 0, player.revision, 4);
+    assert.deepEqual(calls.map(c => c.key), ['opus', 'reference'], '同じ位置の往復で問題の音を復号し直さない');
+    player.comparisonTargets = [null, opus, mp3].map(p => player.targetFor(p));
+    await player.pump(); await player.pump(); await player.pump(); await player.pump();
+    const readyCalls = calls.length;
+    await player.pump(); assert.equal(calls.length, readyCalls, '停止中の現在・次区間が揃ったら追加処理しない');
+    for (const target of player.comparisonTargets) if (target.key !== 'opus') for (const start of [0, 4]) assert.ok(player.analysisChunk(target, start * 48000, 4 * 48000));
+    player.anchorFrame = 5 * 48000;
+    await player.decode(player.target, 4 * 48000, player.revision, 8);
+    await player.pump(); await player.pump();
+    assert.ok(player.switchCache.length <= 4); assert.ok(player.referenceCache.length <= 2);
+    player.forget('mp3'); assert.ok(!player.switchCache.some(c => c.key === 'mp3'));
+    assert.ok(!player.comparisonTargets.some(t => t.id === 'mp3'));
+    assert.ok(player.switchCache.some(c => c.key === 'opus'), '削除時は他のパターンのPCMを維持');
+    player.seek(40); assert.equal(player.switchCache.length, 0);
+
+    await reset(); player.select(opus); await player.play(); await settle(); now = player.anchorTime;
+    player.comparisonTargets = [player.targetFor(null)];
+    const beforeWarm = calls.length;
+    await player.pump(); assert.equal(calls.length, beforeWarm + 1, '再生予約に余裕があれば比較相手を先読み');
+    const beforeSwitch = calls.filter(c => c.start === 0).length;
+    player.select(null); await settle(); player.select(opus); await settle();
+    assert.equal(calls.filter(c => c.start === 0).length, beforeSwitch, '再生中の往復は現在区間を再復号しない（次区間の先読みは継続）');
+    const oldFrame = player.anchorFrame, oldTime = player.anchorTime;
+    player.busy = true; player.select(null);
+    assert.equal(player.target.id, 'reference', '別の復号中でも準備済み音源へ即座に切り替える');
+    assert.equal(player.anchorFrame, oldFrame + Math.round((player.anchorTime - oldTime) * 48000), '切り替え時刻と音源のフレーム位置を揃える'); player.busy = false;
+
+    await reset(); player.select(opus); await player.play(); await settle(); now = player.anchorTime;
+    player.decodeSeconds = 1; player.comparisonTargets = [player.targetFor(null)];
+    now = player.endTime - 2; const beforeTight = calls.length;
+    await player.prefetch(player.revision); assert.equal(calls.length, beforeTight, '先読み不足時は比較相手の復号を始めない');
+
+    await reset(); player.select(opus); await player.play(); await settle(); now = player.anchorTime;
+    cost = 4; player.select(null); await settle();
+    assert.equal(player.buffering, true, '準備区間を追い越した場合は位置を固定する');
+    const frozen = player.frame;
+    await player.pump();
+    assert.equal(player.target.id, 'reference'); assert.equal(player.requested, null);
+    assert.equal(player.buffering, false); assert.equal(player.playing, true);
+    assert.equal(player.anchorFrame, frozen, '待機後も位置を飛ばさず再開');
+    assert.equal(calls.filter(c => c.key === 'reference').length, 3, '失敗1回・固定位置の準備・次区間の予約で完了する');
+
+    await reset(); player.select(opus); await player.play(); await settle(); now = player.anchorTime;
+    player.decodeSeconds = 4; cost = 4; player.select(null); await settle();
+    assert.equal(player.target.id, 'reference'); assert.equal(player.buffering, false, '実測済みなら長めの区間で待機せず切り替える');
+    assert.equal(calls.at(-1).seconds, 8);
+
+    await reset(); player.comparisonTargets = [player.targetFor(opus)];
+    let warmCalls = 0;
+    player.engine.decode = () => { warmCalls++; return new Promise(resolve => { finish = resolve; }); };
+    const warming = player.pump();
+    player.pause(); player.select(opus); finish({}); await warming;
+    await player.decode(player.target, 0, player.revision, 4);
+    assert.equal(warmCalls, 1, '先読み中に同じ音へ切り替えても完成結果を捨てて復号し直さない');
+
+    await reset(); player.comparisonTargets = [player.targetFor(opus)];
+    player.engine.decode = () => new Promise(resolve => { finish = resolve; });
+    const pending = player.pump(); player.forget('opus'); finish({}); await pending;
+    assert.equal(player.switchCache.length, 0, '削除前に始めた先読みをキャッシュへ戻さない');
+    player.comparisonTargets = [player.targetFor(mp3)];
+    player.engine.decode = async () => { throw Error('先読み失敗'); };
+    await player.pump(); assert.ok(player.prefetchRetryAt > performance.now(), '先読みエラーは連続再試行せず待つ');
+  } finally {
+    if (clock) Object.defineProperty(performance, 'now', clock); else delete performance.now;
+    player.dispose();
+  }
+});

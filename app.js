@@ -87,7 +87,7 @@ function status(pattern) {
 }
 function render() {
   if (game?.active) return;
-  $('game-open').disabled = !source || gameCandidates(patterns).length < 2;
+  $('game-open').disabled = !source || gameCandidates(patterns, source).length < 2;
   if (!source) return;
   const focused = document.activeElement?.dataset.focus;
   $('patterns').replaceChildren();
@@ -226,6 +226,7 @@ function openEditor(pattern = null) {
   $('fields').querySelector('select').focus();
 }
 function discardPreview(pattern) {
+  player.forget(pattern.id);
   const selected = [playback.selected, playback.pending].includes(pattern.id);
   if (selected) { player.pause(); player.select(null); }
   if (pattern.state === 'encoding') encoder?.terminate();

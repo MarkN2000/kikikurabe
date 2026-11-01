@@ -136,9 +136,14 @@ export class Player {
     this.onError = onError;
     this.engine = new Engine();
     this.revision = 0;
+    this.cacheGeneration = 0;
     this.nodes = new Set();
     this.cache = [];
     this.referenceCache = [];
+    this.switchCache = [];
+    this.comparisonTargets = [];
+    this.decodeSeconds = 0;
+    this.prefetchRetryAt = 0;
     this.playing = false;
     this.loop = false;
     this.buffering = false;
@@ -149,6 +154,7 @@ export class Player {
   setSource(source) {
     this.pause();
     this.revision++;
+    this.cacheGeneration++;
     this.engine.terminate();
     this.engine = new Engine();
     this.source = source;
@@ -156,6 +162,10 @@ export class Player {
     this.requested = null;
     this.cache = [];
     this.referenceCache = [];
+    this.switchCache = [];
+    this.comparisonTargets = [];
+    this.decodeSeconds = 0;
+    this.prefetchRetryAt = 0;
     this.anchorFrame = 0;
     this.chunkSeconds = 8;
     this.emit();
@@ -183,7 +193,7 @@ export class Player {
     await this.context.resume();
     if (revision !== this.revision) return;
     this.anchorFrame = Math.round(seconds * this.rate);
-    if (this.anchorFrame >= this.totalFrames) { this.anchorFrame = 0; this.cache = []; this.referenceCache = []; }
+    if (this.anchorFrame >= this.totalFrames) { this.anchorFrame = 0; this.cache = []; this.referenceCache = []; this.switchCache = []; this.cacheGeneration++; }
     this.playing = true;
     this.buffering = true;
     this.emit();
@@ -212,26 +222,54 @@ export class Player {
   seek(seconds) {
     if (!this.source) return;
     this.revision++;
+    this.cacheGeneration++;
     this.stopNodes();
     this.anchorFrame = Math.round(Math.max(0, Math.min(seconds, this.source.duration)) * this.rate);
     this.cache = [];
     this.referenceCache = [];
+    this.switchCache = [];
     this.buffering = this.playing;
     this.emit();
-    this.pump();
+    if (this.playing) this.pump();
+  }
+  targetFor(pattern) {
+    const shared = !pattern || samePreview(pattern.config, this.source);
+    return { id: pattern?.id || 'reference', key: shared ? 'reference' : pattern.id, reference: shared, codec: pattern?.config.codec, bitrate: pattern?.config.bitrate, rate: pattern?.config.rate, frameDuration: pattern?.config.frameDuration, channels: shared ? this.source.channels : pattern.config.channels, blob: shared ? this.source.file : pattern.blob };
   }
   select(pattern) {
     if (!this.source) return;
-    const shared = !pattern || samePreview(pattern.config, this.source);
-    const target = { id: pattern?.id || 'reference', key: shared ? 'reference' : pattern.id, reference: shared, codec: pattern?.config.codec, bitrate: pattern?.config.bitrate, rate: pattern?.config.rate, frameDuration: pattern?.config.frameDuration, channels: shared ? this.source.channels : pattern.config.channels, blob: shared ? this.source.file : pattern.blob };
+    const target = this.targetFor(pattern);
     if (!target.blob) return;
+    for (const chunk of this.cache) this.keepSwitch(chunk);
     if (!this.playing || target.key === this.target.key) {
       this.target = target;
       this.requested = null;
       this.cache = this.cache.filter(c => c.key === target.key);
     } else this.requested = target.id === this.target.id ? null : target;
+    if (this.requested && !this.buffering && this.switchReady(this.requested,
+      this.analysisChunk(this.requested, this.frame, Math.min(this.rate * 0.15, this.totalFrames - this.frame)))) this.revision++;
     this.emit();
-    this.pump();
+    if (this.playing) this.pump();
+  }
+  forget(id) {
+    this.revision++;
+    this.cacheGeneration++;
+    this.cache = this.cache.filter(c => c.key !== id);
+    this.switchCache = this.switchCache.filter(c => c.key !== id);
+    this.comparisonTargets = this.comparisonTargets.filter(t => t.id !== id);
+  }
+  keepSwitch(chunk) {
+    if (chunk.key === 'reference') return;
+    const retained = this.switchCache.filter(c => c.end > this.frame);
+    const keys = [...new Set([chunk.key, ...retained.map(c => c.key)])].slice(0, 2);
+    this.switchCache = keys.flatMap(key => {
+      const chunks = retained.filter(c => c.key === key);
+      if (key === chunk.key && !chunks.some(c => c.start <= chunk.start && c.end >= chunk.end)) {
+        return [...chunks.filter(c => c.start < chunk.start || c.end > chunk.end), chunk]
+          .sort((a, b) => a.start - b.start).slice(0, 2);
+      }
+      return chunks.slice(0, 2);
+    });
   }
   keepReference(chunk) {
     if (chunk.key !== 'reference') return;
@@ -243,20 +281,25 @@ export class Player {
   async decode(target, start, revision, seconds = this.chunkSeconds) {
     start = Math.floor(start / (4 * this.rate)) * 4 * this.rate;
     const frames = Math.min(this.totalFrames - start, Math.round(seconds * this.rate));
-    const engine = this.engine, begin = performance.now();
+    const engine = this.engine, generation = this.cacheGeneration, begin = performance.now();
     const prepared = this.analysisChunk(target, start, frames) || this.readPrepared?.(target, start, frames);
     const buffer = prepared?.buffer || await engine.decode(this.source, target, start, frames, this.context);
-    if (revision !== this.revision) return null;
+    if (engine !== this.engine || generation !== this.cacheGeneration) return null;
     // ponytail: 前回の復号時間だけで調整する。上限16秒。継続的に間に合わない場合は待機する。
-    if (!prepared) this.chunkSeconds = Math.max(4, Math.min(16, Math.ceil((performance.now() - begin) / 1000) * 4));
+    if (!prepared) {
+      this.decodeSeconds = (performance.now() - begin) / 1000;
+      this.chunkSeconds = Math.max(4, Math.min(16, Math.ceil(this.decodeSeconds) * 4));
+    }
     const chunk = { key: target.key, start: prepared?.start ?? start, end: prepared?.end ?? start + frames, buffer };
-    this.cache.push(chunk);
+    if (target.key === this.target.key) this.cache = [...this.cache.filter(c => c.start !== chunk.start), chunk];
     this.keepReference(chunk);
-    return chunk;
+    this.keepSwitch(chunk);
+    // 一時停止・切替で再生予約が古くなっても、同じ音源・位置の準備結果は次の要求で再利用する。
+    return revision === this.revision ? chunk : null;
   }
   analysisChunk(target, start, frames) {
     if (!this.source || frames <= 0 || start < 0 || start + frames > this.totalFrames) return null;
-    const chunks = target.key === 'reference' ? [...this.cache, ...this.referenceCache] : this.cache;
+    const chunks = [...this.cache, ...(target.key === 'reference' ? this.referenceCache : this.switchCache || [])].filter(c => c.key === target.key);
     const cached = chunks.find(c => c.key === target.key && c.start <= start && c.end >= start + frames);
     if (cached) return cached;
     // 区間境界をまたぐ場合も、既存の現在区間＋次区間から取り出す。
@@ -298,11 +341,40 @@ export class Player {
     this.buffering = false;
     this.schedule(chunk, start, when);
   }
+  switchReady(target, chunk) {
+    if (!chunk) return false;
+    const when = this.context.currentTime + 0.025;
+    const frame = this.anchorFrame + Math.round((when - this.anchorTime) * this.rate);
+    if (frame < chunk.start || frame + this.rate * 0.1 >= chunk.end || when >= this.endTime) return false;
+    for (const previous of this.cache) this.keepSwitch(previous);
+    this.stopNodes(when - 0.005);
+    this.target = target;
+    this.requested = null;
+    this.cache = [chunk];
+    this.begin(chunk, frame, when);
+    this.emit();
+    return true;
+  }
+  async prefetch(revision) {
+    if (this.requested || this.buffering || performance.now() < this.prefetchRetryAt) return;
+    // ponytail: 直近1回の実測で余裕を判定する。急な負荷増は予測できないため、最大8秒の1件だけを処理する。
+    if (this.playing && this.ahead < Math.max(6, this.decodeSeconds * 2 + 2)) return;
+    const start = Math.floor(this.frame / (4 * this.rate)) * 4 * this.rate;
+    for (const offset of [0, 4 * this.rate]) for (const target of this.comparisonTargets) {
+      if (this.playing && target.key === this.target.key) continue;
+      const from = start + offset, frames = Math.min(4 * this.rate, this.totalFrames - from);
+      if (frames <= 0 || this.analysisChunk(target, from, frames)) continue;
+      try { await this.decode(target, from, revision, 8); }
+      catch { if (revision === this.revision) this.prefetchRetryAt = performance.now() + 5000; }
+      return;
+    }
+  }
   async pump() {
-    if (this.busy || !this.playing || !this.source || !this.context) return;
+    if (this.busy || !this.source || !this.context || (!this.playing && !this.comparisonTargets.length)) return;
     this.busy = true;
     const revision = this.revision;
     try {
+      if (!this.playing) { await this.prefetch(revision); return; }
       let pos = this.frame;
       if (pos >= this.totalFrames) {
         if (this.loop) this.seek(0);
@@ -317,12 +389,15 @@ export class Player {
         this.emit();
       }
       if (this.buffering) {
+        if (this.requested) { this.target = this.requested; this.requested = null; this.cache = []; }
         pos = this.anchorFrame;
-        const chunk = this.cache.find(c => c.start <= pos && c.end > pos) || await this.decode(this.target, pos, revision);
+        const chunk = this.analysisChunk(this.target, pos, Math.min(this.rate * 0.15, this.totalFrames - pos)) || await this.decode(this.target, pos, revision);
         if (!chunk || revision !== this.revision) return;
+        if (!this.cache.includes(chunk)) this.cache.push(chunk);
         this.begin(chunk, pos, this.context.currentTime + 0.025);
         this.emit();
       }
+      if (this.requested && this.switchReady(this.requested, this.analysisChunk(this.requested, this.frame, Math.min(this.rate * 0.15, this.totalFrames - this.frame)))) return;
       // 選択中の次区間を先に準備する。切替先の復号で現在の再生を止めない。
       const prepared = this.cache.find(c => c.start <= this.scheduledEnd && c.end > this.scheduledEnd);
       if (this.scheduledEnd < this.totalFrames && (prepared || this.cache.filter(c => c.key === this.target.key && c.end > this.frame).length < 2)) {
@@ -341,22 +416,20 @@ export class Player {
         const target = this.requested;
         const start = this.frame;
         const offset = start % (4 * this.rate) / this.rate;
-        const seconds = Math.min(16, Math.ceil((offset + Math.max(1, this.chunkSeconds / 4)) / 4) * 4);
+        const seconds = Math.min(16, Math.ceil((offset + Math.max(1, this.decodeSeconds * 1.5 + 1)) / 4) * 4);
         const chunk = await this.decode(target, start, revision, seconds);
         if (!chunk || revision !== this.revision || this.requested !== target) return;
-        const when = this.context.currentTime + 0.025;
-        const switchFrame = this.anchorFrame + Math.round((when - this.anchorTime) * this.rate);
-        if (switchFrame + this.rate * 0.1 >= chunk.end || when >= this.endTime) return;
-        this.stopNodes(when - 0.005);
-        this.target = target;
-        this.requested = null;
-        this.cache = [chunk];
-        this.begin(chunk, switchFrame, when);
-        this.emit();
-      }
+        if (!this.switchReady(target, chunk)) {
+          // 復号より時計が速く進む環境では、同じ失敗を繰り返さず位置を固定して次のpumpで準備する。
+          this.anchorFrame = this.frame;
+          this.buffering = true;
+          this.stopNodes();
+          this.emit();
+        }
+      } else if (this.comparisonTargets.length) await this.prefetch(revision);
     } catch (error) {
       if (revision === this.revision) { this.pause(); this.requested = null; this.onError?.(error); }
     } finally { this.busy = false; }
   }
-  dispose() { this.pause(); clearInterval(this.timer); this.engine.terminate(); this.context?.close(); }
+  dispose() { this.pause(); this.cacheGeneration++; this.comparisonTargets = []; clearInterval(this.timer); this.engine.terminate(); this.context?.close(); }
 }

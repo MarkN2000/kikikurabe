@@ -15,7 +15,10 @@ test('聴き分けクイズは完成済みだけを使い、同じ設定・可�
     pattern('flac16', 'flac', { depth: 16 }), pattern('wav16', 'wav', { depth: 16 }),
     pattern('mono', 'flac', { channels: 1 }), pattern('rate', 'flac', { rate: 44100 }),
     { ...pattern('queued', 'mp3'), state: 'queued' }, { ...pattern('failed', 'mp3'), state: 'error' }, { ...pattern('missing', 'mp3'), blob: null }];
-  assert.deepEqual(gameCandidates(patterns).map(p => p.id), ['opus', 'low', 'cbr', 'cut', 'wav24', 'flac16', 'mono', 'rate']);
+  assert.deepEqual(gameCandidates(patterns, source).map(p => p.id), ['reference', 'opus', 'low', 'cbr', 'cut', 'flac16', 'mono', 'rate']);
+  assert.deepEqual(gameCandidates(patterns, null), [], '音源なしでは開始しない');
+  assert.equal(gameCandidates([pattern('one', 'opus')], source).length, 2, '基準と圧縮パターン1件で開始できる');
+  assert.equal(gameCandidates([pattern('same', 'flac')], source).length, 1, '基準と同じPCMだけでは開始しない');
   const input = [0, 1, 2, 3];
   assert.deepEqual(shuffled(input, () => 0), [1, 2, 3, 0]);
   assert.deepEqual(shuffled(input, () => .999), input);
@@ -58,6 +61,7 @@ test('聴き分けクイズの準備・採点・再試行・終了は既存Playe
   const patterns = [pattern('normal', 'opus'), pattern('other', 'mp3')], calls = [];
   let release, wait = null, activeDecodes = 0, maxDecodes = 0, failed = false;
   const player = { source, target: { id: 'normal' }, position: 12.345, loop: true, revision: 0, busy: false, playing: true,
+    rate: 48000, analysisChunk: () => null, targetFor: p => ({ id: p?.id || 'reference', key: p?.id || 'reference' }),
     get frame() { return Math.round(this.position * 48000); }, get totalFrames() { return 60 * 48000; },
     pause() { this.playing = false; this.revision++; }, select(p) { this.target = { id: p?.id || 'reference' }; }, seek(seconds) { this.position = seconds; this.revision++; }, ensureContext() {},
     async decode(target, start, revision) {
@@ -72,9 +76,10 @@ test('聴き分けクイズの準備・採点・再試行・終了は既存Playe
     game.open(); assert.equal(opened, 1); assert.ok(classes.has('cc-game-open')); assert.equal(player.playing, false);
     assert.ok(node('game-stage').innerHTML.includes('基準PCM比 5.6%'), '実サイズと基準PCMから選択肢の数値を求める');
     await game.start([0, 0]); assert.equal(game.phase, 'setup', '1択・重複選択では開始しない');
-    await game.start([0, 1]); assert.equal(game.preparing, false);
+    await game.start([0, 1, 2]); assert.equal(game.preparing, false);
     assert.equal(calls[0].target, game.items[game.order[0]].id); assert.equal(calls[0].start, Math.round(12.345 * 48000));
     ListeningGame.prototype.renderQuestion.call(game);
+    assert.deepEqual(player.comparisonTargets.map(t => t.id), [...new Set(['reference', game.items[game.order[0]].id])], '問題の音と基準だけを先読みする');
     assert.ok(node('game-stage').innerHTML.includes('data-listen="reference"'), '出題中も基準音源を選べる');
     assert.ok(!node('game-stage').innerHTML.includes('data-listen="selected"'), '出題中は選んだ音を表示しない');
     const prepare = game.prepare.bind(game); let preparation;
@@ -98,18 +103,47 @@ test('聴き分けクイズの準備・採点・再試行・終了は既存Playe
     assert.ok(!node('game-stage').innerHTML.includes('data-listen="selected"'), '正解時は選んだ音を省く');
     listen('reference'); await preparation;
     await game.next(); assert.equal(game.listen, 'correct'); assert.equal(player.target.id, game.items[game.order[1]].id, '次の問題は問題の音へ戻す');
-    game.selected = 1 - game.order[1]; game.answer();
+    assert.equal((game.choices(game.items).match(/name="game-answer"/g) || []).length, 2, '3択から2択へ減る');
+    game.selected = game.order[0]; game.answer(); assert.equal(game.phase, 'question', '除外済みの選択肢は採点できない');
+    game.selected = game.order[2]; game.answer();
     ListeningGame.prototype.renderQuestion.call(game);
     assert.ok(node('game-stage').innerHTML.includes('data-listen="selected"') && node('game-stage').innerHTML.includes('data-listen="reference"'), '誤答時は正解・選んだ音・基準の3択');
+    assert.deepEqual(player.comparisonTargets.map(t => t.id), [...new Set(['reference', game.items[game.order[1]].id, game.items[game.selected].id])]);
     listen('selected'); await preparation; assert.equal(player.target.id, game.items[game.selected].id);
     listen('reference'); await preparation; assert.equal(player.target.id, 'reference');
     await game.next();
     assert.equal(game.phase, 'result'); assert.ok(node('game-stage').innerHTML.includes('2問中 <strong>1</strong> 問正解'));
+    assert.deepEqual(player.comparisonTargets, [], '結果画面では比較相手の先読みを解除する');
     game.setup(); await game.start([0, 1]);
+    game.order = [0, 1]; await game.prepare();
+    assert.equal(game.listeningPattern, null, '基準が問題のときは既存Playerの基準再生を使う');
+    assert.equal(player.target.id, 'reference');
+    assert.ok(game.choices(game.items).includes('PCM換算 17.28 MB · 基準PCM比 100.0%'));
+    game.selected = 0; game.answer();
+    ListeningGame.prototype.renderQuestion.call(game);
+    assert.ok(node('game-stage').innerHTML.includes('基準音源（PCM変換済み）'));
+    assert.ok(node('game-stage').innerHTML.includes('結果を見る'));
+    await game.next();
+    assert.equal(game.phase, 'result');
+    assert.ok(node('game-stage').innerHTML.includes('1問中 <strong>1</strong> 問正解'), '2択なら1問で終了する');
+    game.setup(); await game.start([0, 1, 2]);
+    game.selected = game.order[1]; game.answer();
+    const removed = game.order[0], retained = game.selected;
+    await game.next();
+    const remaining = [...game.choices(game.items).matchAll(/name="game-answer" value="(\d+)"/g)].map(match => Number(match[1]));
+    assert.equal(remaining.length, 2);
+    assert.ok(!remaining.includes(removed) && remaining.includes(retained), '誤答時も正解を除外し、間違えて選んだ音は残す');
+    game.setup(); await game.start([1, 2]);
     game.selected = 1 - game.order[0]; game.answer(); game.listen = 'selected'; failed = true;
     await game.prepare(); assert.ok(game.error); assert.ok(!game.error.includes('内部エラー'), '答えにつながるエラー詳細を見せない');
     failed = false; player.target = { id: 'normal' };
     await game.prepare(); assert.equal(player.target.id, game.items[game.selected].id, '再試行でも選んだ音を準備する');
+    const beforeCached = calls.length;
+    player.busy = true; player.analysisChunk = () => ({ buffer: {} });
+    await game.prepare();
+    assert.equal(game.preparing, false, '準備済みなら別の復号完了を待たない');
+    assert.equal(calls.length, beforeCached); assert.equal(player.busy, true, '進行中のWorkerのロックを奪わない');
+    player.busy = false; player.analysisChunk = () => null;
     wait = new Promise(resolve => { release = resolve; });
     const pending = game.prepare(); assert.equal(player.busy, true);
     const superseded = game.prepare();
@@ -120,6 +154,7 @@ test('聴き分けクイズの準備・採点・再試行・終了は既存Playe
     assert.equal(renders, lastRender); assert.equal(ticks, lastTick, '終了後の結果でゲーム画面を更新しない');
     assert.equal(player.target.id, 'normal'); assert.equal(player.position, 12.345); assert.equal(player.loop, true); assert.equal(player.playing, false);
     assert.equal(closed, 1); assert.ok(!classes.has('cc-game-open')); assert.equal(game.pool, null);
+    assert.deepEqual(player.comparisonTargets, [], '閉じた後は先読みを続けない');
     game.open(); node('game').listeners.close(); assert.equal(game.active, true, '前のcloseイベントで新しいゲームを閉じない');
     node('game').listeners.cancel({ preventDefault() {} }); assert.equal(game.active, false, 'Escapeで復元して終了する');
   } finally { globalThis.document = previousDocument; }
