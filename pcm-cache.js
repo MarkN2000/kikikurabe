@@ -1,3 +1,4 @@
+import { t } from './i18n.js';
 import { LIMITS } from './model.js';
 
 let entries = [], directory;
@@ -39,13 +40,13 @@ export async function storedPCM(blob, key, bytes, write) {
       entry.dir = dir;
       await write(handle);
       const file = await handle.getFile();
-      if (file.size < 44 || file.size > bytes) throw Error('一時PCMのサイズが不正です。');
+      if (file.size < 44 || file.size > bytes) throw Error(t("一時PCMのサイズが不正です。"));
       entry.bytes = file.size;
       return file;
     } catch (error) {
       entry.bytes = 0;
       await dir?.removeEntry(entry.name).catch(() => {});
-      console.warn('一時PCMを保存できないため、従来の区間復号を使用します。', error);
+      console.warn(t("一時PCMを保存できないため、従来の区間復号を使用します。"), error);
       return null;
     }
   })();

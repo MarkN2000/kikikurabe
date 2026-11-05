@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import { LIMITS, defaults } from '../model.js';
+import { t } from '../i18n.js';
 
 test('音源変更で設定だけを保持し、解析後の自動変換・失敗・連続変更を扱う', async () => {
   // 実際の読み込み・キュー関数を使い、DOMと重い音声処理だけを置き換える。
@@ -12,7 +13,7 @@ test('音源変更で設定だけを保持し、解析後の自動変換・失�
   const config = { ...defaults('opus', { rate: 44100, channels: 2 }), bitrate: 192, cutoff: 12000 };
   const player = () => ({ canEncode: true, dispose() {}, setSource(source) { this.source = source; } });
   const context = vm.createContext({
-    LIMITS, game: null, source: { file: { size: 10 } }, session: 0, encoding: true, graphBusy: false,
+    t, LIMITS, game: null, source: { file: { size: 10 } }, session: 0, encoding: true, graphBusy: false,
     patterns: [{ id: 'a', config, state: 'encoding', blob: { size: 99 }, progress: 50, error: '古いエラー' },
       { id: 'b', config: { ...defaults('g711', { rate: 44100, channels: 2 }), law: 'alaw' }, state: 'ready', blob: { size: 88 } }],
     player: player(), makePlayer: player, graph: { reset() {} }, encoder: null, editing: {}, draft: {},

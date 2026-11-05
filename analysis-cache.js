@@ -1,3 +1,4 @@
+import { t } from './i18n.js';
 const MEMORY_LIMIT = 8 * 1024 ** 2, STORAGE_LIMIT = 128 * 1024 ** 2;
 const request = value => new Promise((resolve, reject) => {
   value.onsuccess = () => resolve(value.result);
@@ -33,7 +34,7 @@ export class AnalysisCache {
       const db = await new Promise((resolve, reject) => {
         opening.onsuccess = () => { if (this.failed) opening.result.close(); else resolve(opening.result); };
         opening.onerror = () => reject(opening.error);
-        opening.onblocked = () => { this.failed = true; reject(Error('分析キャッシュを開けません。')); };
+        opening.onblocked = () => { this.failed = true; reject(Error(t("分析キャッシュを開けません。"))); };
       });
       db.onversionchange = () => { db.close(); this.failed = true; };
       await this.prune(db);

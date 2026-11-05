@@ -1,3 +1,4 @@
+import { t } from './i18n.js';
 // 公式Workerの通信を使い、PCMの出力だけをOPFSへ直接流す。WASMコアは変更しない。
 import './vendor/ffmpeg/worker.js';
 import createCore from './vendor/core/ffmpeg-core.js';
@@ -33,7 +34,7 @@ self.onmessage = async event => {
   let handle;
   try {
     if (type === 'MOUNT') {
-      if (data.mountPoint !== '/preview' || output || !Number.isSafeInteger(data.options.limit) || data.options.limit <= 0) throw Error('一時PCMの出力先が不正です。');
+      if (data.mountPoint !== '/preview' || output || !Number.isSafeInteger(data.options.limit) || data.options.limit <= 0) throw Error(t("一時PCMの出力先が不正です。"));
       handle = await data.options.file.createSyncAccessHandle();
       handle.truncate(0);
       core.FS.mkdir('/preview');

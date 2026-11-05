@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import { AnalysisCache } from '../analysis-cache.js';
 import { spectrumFrames, spectrumSteps, compactFrames, FFT_SIZE } from '../analysis.js';
 import { averageSpectrum, bandDifference } from '../graph.js';
+import { t } from '../i18n.js';
 
 test('1024 FFTは実行間隔を増やさず、小分けでも一致し、集計後のパワーを保つ', () => {
   assert.equal(FFT_SIZE, 1024);
@@ -191,14 +192,14 @@ test('FFT Workerは時間でまとめ、休止・再開しても計算結果を�
   let clock = 0, stopped = false, result;
   const waits = [], Scope = class {};
   const self = new Scope(); self.postMessage = data => { result = data; };
-  const scope = vm.createContext({ WorkerGlobalScope: Scope, self, Float32Array, Float64Array, Uint16Array,
+  const scope = vm.createContext({ t, WorkerGlobalScope: Scope, self, Float32Array, Float64Array, Uint16Array,
     performance: { now: () => ++clock }, setTimeout(fn, ms) {
       waits.push(ms);
       if (ms === 0 && !stopped) { stopped = true; self.onmessage({ data: { paused: true } }); }
       else if (ms === 20) self.onmessage({ data: { paused: false } });
       queueMicrotask(fn);
     } });
-  vm.runInContext(text.replaceAll('export ', ''), scope);
+  vm.runInContext(text.replace(/^import .*;\r?\n/gm, '').replaceAll('export ', ''), scope);
   const channels = [Float32Array.from({ length: 48000 * 4 }, (_, i) => Math.sin(i * .05) * .25)];
   await self.onmessage({ data: { channels: [channels], rate: 48000 } });
   const expected = compactFrames(spectrumFrames(channels, 48000));

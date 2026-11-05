@@ -1,3 +1,4 @@
+import { t } from './i18n.js';
 export const LIMITS = { input: 512 * 1024 ** 2, output: 512 * 1024 ** 2, total: 1024 ** 3 };
 const commonRates = [8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000, 88200, 96000, 176400, 192000];
 const commonCutoffs = [0, 3400, 4000, 6000, 7000, 8000, 10000, 12000, 14000, 16000, 18000, 20000, 22050, 24000, 32000, 40000, 44100, 48000];
@@ -39,15 +40,15 @@ export function bitratesFor(c) {
 export function cutoffsFor(c) { return CODECS[c.codec]?.cutoffs?.filter(hz => hz <= c.rate / 2) || []; }
 export function validateConfig(c, source) {
   const codec = CODECS[c.codec];
-  if (!codec || !ratesFor(c.codec, source.rate).includes(c.rate) || !(codec.channels || [1, 2]).includes(c.channels)) throw Error('音声の設定が不正です。');
-  if (codec.depths && !codec.depths.includes(c.depth)) throw Error('ビット深度を選択してください。');
-  if (codec.modes && !codec.modes.includes(c.mode)) throw Error('圧縮モードを選択してください。');
-  if (codec.laws && !codec.laws.some(([law]) => law === c.law)) throw Error('圧伸方式を選択してください。');
-  if (codec.frameDurations && !codec.frameDurations.includes(c.frameDuration)) throw Error('フレーム長を選択してください。');
-  if (codec.bits && !(c.codec === 'mp3' && c.mode === 'VBR') && !bitratesFor(c).includes(c.bitrate)) throw Error('ビットレートを選択してください。');
-  if (codec.qualities && (c.codec === 'vorbis' || c.mode === 'VBR') && !codec.qualities.includes(c.quality)) throw Error('品質を選択してください。');
-  if (codec.levels && !codec.levels.includes(c.level)) throw Error('圧縮レベルを選択してください。');
-  if ((c.cutoff ?? 0) !== 0 && !cutoffsFor(c).includes(c.cutoff)) throw Error('この形式・サンプルレートで選べるカットオフを指定してください。');
+  if (!codec || !ratesFor(c.codec, source.rate).includes(c.rate) || !(codec.channels || [1, 2]).includes(c.channels)) throw Error(t("音声の設定が不正です。"));
+  if (codec.depths && !codec.depths.includes(c.depth)) throw Error(t("ビット深度を選択してください。"));
+  if (codec.modes && !codec.modes.includes(c.mode)) throw Error(t("圧縮モードを選択してください。"));
+  if (codec.laws && !codec.laws.some(([law]) => law === c.law)) throw Error(t("圧伸方式を選択してください。"));
+  if (codec.frameDurations && !codec.frameDurations.includes(c.frameDuration)) throw Error(t("フレーム長を選択してください。"));
+  if (codec.bits && !(c.codec === 'mp3' && c.mode === 'VBR') && !bitratesFor(c).includes(c.bitrate)) throw Error(t("ビットレートを選択してください。"));
+  if (codec.qualities && (c.codec === 'vorbis' || c.mode === 'VBR') && !codec.qualities.includes(c.quality)) throw Error(t("品質を選択してください。"));
+  if (codec.levels && !codec.levels.includes(c.level)) throw Error(t("圧縮レベルを選択してください。"));
+  if ((c.cutoff ?? 0) !== 0 && !cutoffsFor(c).includes(c.cutoff)) throw Error(t("この形式・サンプルレートで選べるカットオフを指定してください。"));
 }
 export function commonFilter(source, preparedPCM = false) {
   // ponytail: aeval は毎サンプル評価。高レートで遅い場合は24 bit量子化専用フィルターへ置換する。
@@ -109,15 +110,15 @@ export function metrics(bytes, source) {
 export function description(c) {
   const parts = [];
   if (c.codec === 'g711') parts.push(CODECS.g711.laws.find(([law]) => law === c.law)[1]);
-  if (c.codec === 'mp3' && c.mode === 'VBR') parts.push(`VBR 品質 ${c.quality}`);
-  else if (CODECS[c.codec].bits) parts.push(`${c.bitrate} kbps${c.mode ? ` ${c.mode}` : '（平均）'}`);
-  if (c.codec === 'vorbis') parts.push(`品質 ${c.quality}`);
-  if (c.codec === 'flac') parts.push(`レベル ${c.level}`);
+  if (c.codec === 'mp3' && c.mode === 'VBR') parts.push(t("VBR 品質 {0}", c.quality));
+  else if (CODECS[c.codec].bits) parts.push(`${c.bitrate} kbps${c.mode ? ` ${c.mode}` : t("（平均）")}`);
+  if (c.codec === 'vorbis') parts.push(t("品質 {0}", c.quality));
+  if (c.codec === 'flac') parts.push(t("レベル {0}", c.level));
   if (c.codec === 'lc3') parts.push(`${c.frameDuration} ms`);
   parts.push(`${c.rate.toLocaleString()} Hz`);
   if (CODECS[c.codec].depths) parts.push(`${c.depth} bit`);
-  if (c.cutoff) parts.push(`カットオフ ${c.cutoff.toLocaleString()} Hz`);
-  parts.push(c.channels === 1 ? 'モノラル' : 'ステレオ');
+  if (c.cutoff) parts.push(t("カットオフ {0} Hz", c.cutoff.toLocaleString()));
+  parts.push(c.channels === 1 ? t("モノラル") : t("ステレオ"));
   return parts.join(' · ');
 }
 export function timeLabel(seconds) {

@@ -1,3 +1,4 @@
+import { t } from './i18n.js';
 import { melAt, melPosition } from './analysis.js';
 import { AnalysisCache } from './analysis-cache.js';
 export { melAt, melPosition };
@@ -89,7 +90,7 @@ export class ComparisonGraph {
   tick() {
     const player = this.getPlayer();
     if (!this.active) return;
-    if (!player.source) { this.reset(); this.status.textContent = '音源を選択すると比較できます。'; return; }
+    if (!player.source) { this.reset(); this.status.textContent = t("音源を選択すると比較できます。"); return; }
     const start = Math.floor(Math.max(0, Math.min(player.position, player.source.duration - 1 / player.rate)) / 4) * 4;
     const blob = player.target.blob || player.source.file || player.source;
     const key = this.cache.key(blob, player.rate, 0);
@@ -106,8 +107,8 @@ export class ComparisonGraph {
         this.worker?.postMessage({ paused: true }); this.releaseDecoder?.();
       }
       const shown = this.display;
-      const range = shown ? `${shown.start.toFixed(1)}–${(shown.start + shown.data[0].length / shown.data[0].rate).toFixed(1)} 秒 · ` : '';
-      this.status.textContent = `${range}再生を優先してグラフを休止中`;
+      const range = shown ? t("{0}–{1} 秒 · ", shown.start.toFixed(1), (shown.start + shown.data[0].length / shown.data[0].rate).toFixed(1)) : '';
+      this.status.textContent = t("{0}再生を優先してグラフを休止中", range);
       return;
     }
     if (this.suspended) { this.worker?.postMessage({ paused: false }); this.suspended = false; }
@@ -123,7 +124,7 @@ export class ComparisonGraph {
     document.getElementById('graph-selected').textContent = shown?.label || label;
     if (shown) {
       const end = shown.start + shown.data[0].length / shown.data[0].rate;
-      this.status.textContent = `${shown.start.toFixed(1)}–${end.toFixed(1)} 秒${shown.reference ? ' · 基準と同じPCM' : ''}${current ? '' : ' · 更新待ち'}${this.error ? ` · ${this.error}` : ''}`;
+      this.status.textContent = t("{0}–{1} 秒{2}{3}{4}", shown.start.toFixed(1), end.toFixed(1), shown.reference ? t(" · 基準と同じPCM") : '', current ? '' : t(" · 更新待ち"), this.error ? ` · ${this.error}` : '');
       const width = Math.round(this.plots.parentElement.clientWidth);
       const signature = `${shown.start}:${shown.position.toFixed(2)}:${width}:${shown.label}:${Boolean(current)}`;
       const now = performance.now();
@@ -137,7 +138,7 @@ export class ComparisonGraph {
       }
       this.drawPosition?.(shown.position);
     } else {
-      this.status.textContent = this.error || 'グラフを準備中（圧縮・再生の準備を優先）…';
+      this.status.textContent = this.error || t("グラフを準備中（圧縮・再生の準備を優先）…");
     }
     let next = -1;
     for (let time = start; time <= start + horizon && time < player.source.duration; time += 4) {
@@ -176,7 +177,7 @@ export class ComparisonGraph {
             if (data.error) reject(Error(data.error));
             else { this.stats.fftMs = data.elapsedMs || 0; this.stats.analyses++; resolve(data.results[0]); }
           };
-          this.worker.onerror = () => reject(Error('分析に失敗しました。再試行します。'));
+          this.worker.onerror = () => reject(Error(t("分析に失敗しました。再試行します。")));
           this.worker.postMessage({ channels: [channels], rate: player.rate }, channels.map(c => c.buffer));
           if (this.suspended) this.worker.postMessage({ paused: true });
         });
@@ -193,7 +194,7 @@ export class ComparisonGraph {
       this.error = ''; this.failures = 0; this.retryAt = 0;
     } catch (error) {
       if (valid()) {
-        this.error = `グラフ：${error.message}（再試行待ち）`;
+        this.error = t("グラフ：{0}（再試行待ち）", error.message);
         this.retryAt = performance.now() + Math.min(30, 2 ** ++this.failures) * 1000;
         this.stats.retries++; this.worker?.terminate(); this.worker = null;
       }
@@ -210,7 +211,7 @@ export class ComparisonGraph {
         canvas.width = pixelWidth; canvas.height = pixelHeight;
       }
       canvas.style.height = `${height}px`;
-      canvas.setAttribute('aria-label', `${spectrum ? '周波数スペクトル' : '時間×周波数の差分'}。基準PCMと${label}、${this.status.textContent}。${spectrum ? '共通の尺度で表示。' : '約0.1秒×64帯域の差分。青は減少、白は変化なし、赤は増加。'}`);
+      canvas.setAttribute('aria-label', t("{0}。基準PCMと{1}、{2}。{3}", spectrum ? t("周波数スペクトル") : t("時間×周波数の差分"), label, this.status.textContent, spectrum ? t("共通の尺度で表示。") : t("約0.1秒×64帯域の差分。青は減少、白は変化なし、赤は増加。")));
       if (!spectrum && !resized && this.heatDisplay === this.display && this.heatWidth === pixelWidth) continue;
       if (!spectrum) { this.heatDisplay = this.display; this.heatWidth = pixelWidth; }
       const ctx = canvas.getContext('2d'); ctx.setTransform(ratio, 0, 0, ratio, 0, 0); ctx.clearRect(0, 0, width, height);
@@ -279,9 +280,9 @@ export class ComparisonGraph {
         const gradient = ctx.createLinearGradient(left, 0, right, 0);
         for (let i = 0; i <= 4; i++) gradient.addColorStop(i / 4, `rgb(${differenceColor(i * 12 - 24).join(',')})`);
         ctx.fillStyle = gradient; ctx.fillRect(left, 184, plotWidth, 6);
-        ctx.fillStyle = '#5c7288'; ctx.fillText('−24 dB 減少', left, 207);
+        ctx.fillStyle = '#5c7288'; ctx.fillText(t("−24 dB 減少"), left, 207);
         ctx.textAlign = 'center'; ctx.fillText('0', left + plotWidth / 2, 207);
-        ctx.textAlign = 'right'; ctx.fillText('+24 dB 増加', right, 207);
+        ctx.textAlign = 'right'; ctx.fillText(t("+24 dB 増加"), right, 207);
       }
     }
     this.plotWidth = width;

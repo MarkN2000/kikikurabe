@@ -1,3 +1,4 @@
+import { t } from './i18n.js';
 // 4秒分だけを扱う分析Worker。左右は波形を足さず、パワーを平均する。
 export const FFT_SIZE = 1024;
 // ponytail: 実行回数を増やさない代わりに窓の間の瞬間的な変化を見落とす。全時間を覆う必要が出たらHOPを1024以下にする。
@@ -16,7 +17,7 @@ const sin = Float64Array.from({ length: HALF }, (_, i) => -Math.sin(2 * Math.PI 
 export function* spectrumSteps(channels, rate) {
   const length = channels[0]?.length;
   if (![1, 2].includes(channels.length) || !Number.isFinite(rate) || rate < 8000 || rate > 192000 ||
-    !length || length > rate * 4 || channels.some(c => !(c instanceof Float32Array) || c.length !== length)) throw Error('分析する区間が不正です。');
+    !length || length > rate * 4 || channels.some(c => !(c instanceof Float32Array) || c.length !== length)) throw Error(t("分析する区間が不正です。"));
   const rows = Math.max(1, Math.ceil((length - FFT_SIZE) / HOP) + 1);
   const powers = new Float32Array(rows * BINS), times = new Float32Array(rows);
   const real = new Float64Array(FFT_SIZE), imag = new Float64Array(FFT_SIZE);

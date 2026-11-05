@@ -3,35 +3,35 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="音源をブラウザ内で圧縮し、音質とファイルサイズを比較。Opus・MP3・AACなど、圧縮率による音質の違いを聴き比べ。">
-  <title>ききくらべ｜音声コーデック比較</title>
+  <meta name="description" content="音源をブラウザ内で圧縮し、音質とファイルサイズを比較。Opus・MP3・AACなど、圧縮率による音質の違いを聴き比べ。" data-i18n-content>
+  <title data-i18n>ききくらべ｜音声コーデック比較</title>
   <link rel="canonical" href="https://kikikurabe.markn2000.com/">
   <meta property="og:type" content="website">
-  <meta property="og:site_name" content="ききくらべ">
+  <meta property="og:site_name" content="ききくらべ" data-i18n-content>
   <meta property="og:locale" content="ja_JP">
-  <meta property="og:title" content="ききくらべ｜音声コーデック比較">
-  <meta property="og:description" content="音源をブラウザ内で圧縮し、音質とファイルサイズを比較。Opus・MP3・AACなど、圧縮率による音質の違いを聴き比べ。">
+  <meta property="og:title" content="ききくらべ｜音声コーデック比較" data-i18n-content>
+  <meta property="og:description" content="音源をブラウザ内で圧縮し、音質とファイルサイズを比較。Opus・MP3・AACなど、圧縮率による音質の違いを聴き比べ。" data-i18n-content>
   <meta property="og:url" content="https://kikikurabe.markn2000.com/">
   <meta property="og:image" content="https://kikikurabe.markn2000.com/ogp.png">
   <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="720">
-  <meta property="og:image:alt" content="ききくらべで基準音源とMP3・AACの音質とファイルサイズを比較する画面">
+  <meta property="og:image:alt" content="ききくらべで基準音源とMP3・AACの音質とファイルサイズを比較する画面" data-i18n-content>
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="ききくらべ｜音声コーデック比較">
-  <meta name="twitter:description" content="音源をブラウザ内で圧縮し、音質とファイルサイズを比較。Opus・MP3・AACなど、圧縮率による音質の違いを聴き比べ。">
+  <meta name="twitter:title" content="ききくらべ｜音声コーデック比較" data-i18n-content>
+  <meta name="twitter:description" content="音源をブラウザ内で圧縮し、音質とファイルサイズを比較。Opus・MP3・AACなど、圧縮率による音質の違いを聴き比べ。" data-i18n-content>
   <meta name="twitter:image" content="https://kikikurabe.markn2000.com/ogp.png">
-  <meta name="twitter:image:alt" content="ききくらべで基準音源とMP3・AACの音質とファイルサイズを比較する画面">
+  <meta name="twitter:image:alt" content="ききくらべで基準音源とMP3・AACの音質とファイルサイズを比較する画面" data-i18n-content>
   <link rel="icon" type="image/svg+xml" href="./icon.svg">
   <link rel="stylesheet" href="./style.css">
   <script type="module" src="./app.js"></script>
 </head>
 <body id="codec-compact">
   <header class="cc-header">
-    <img class="cc-mark" src="./icon.svg" width="24" height="24" alt=""><h1>ききくらべ</h1>
-    <nav class="cc-header-links" aria-label="関連リンク">
-      <a href="https://markn2000.com/" target="_blank" rel="noopener noreferrer" title="ホームページ（別タブで開く）">ホームページ</a>
-      <a class="cc-github-link" href="https://github.com/MarkN2000/kikikurabe" target="_blank" rel="noopener noreferrer" aria-label="GitHubリポジトリ（別タブで開く）" title="GitHub">
+    <img class="cc-mark" src="./icon.svg" width="24" height="24" alt=""><h1 data-i18n>ききくらべ</h1>
+    <nav class="cc-header-links" aria-label="関連リンク" data-i18n-aria-label>
+      <a href="https://markn2000.com/" target="_blank" rel="noopener noreferrer" title="ホームページ（別タブで開く）" data-i18n-title data-i18n>ホームページ</a>
+      <a class="cc-github-link" href="https://github.com/MarkN2000/kikikurabe" target="_blank" rel="noopener noreferrer" aria-label="GitHubリポジトリ（別タブで開く）" data-i18n-aria-label title="GitHub">
         <!-- GitHub Octicons: https://github.com/primer/octicons
         MIT License
         Copyright (c) 2026 GitHub Inc.
@@ -56,43 +56,43 @@
     </nav>
   </header>
   <main>
-    <section class="cc-player" aria-label="音源とプレーヤー">
-      <button class="cc-play cc-primary" id="play" aria-label="再生" disabled><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path id="play-icon" d="M6 3 21 12 6 21Z"/></svg></button>
-      <span class="cc-filename" id="filename">音源を選択、またはここにドロップ</span>
-      <button class="cc-loop" id="loop" aria-label="ループ再生" aria-pressed="false" title="ループ再生：オフ"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m17 2 4 4-4 4M21 6H7a4 4 0 0 0-4 4m4 12-4-4 4-4M3 18h14a4 4 0 0 0 4-4"/></svg></button>
-      <button class="cc-change" id="change">音源変更</button>
-      <div class="cc-source-info" id="source-info"><span>音声はブラウザ内で処理します</span></div>
-      <div class="cc-seek-row"><span id="position">00:00</span><input class="cc-seek" id="seek" type="range" min="0" max="0" value="0" step="0.01" aria-label="再生位置" disabled><span id="duration">00:00</span></div>
-      <input id="file" type="file" accept="audio/*,video/*,.opus,.ogg,.flac,.wav,.m4a,.aac,.aif,.aiff,.sbc,.lc3,.mp4,.mov,.webm,.mkv" aria-label="音声・動画ファイル" hidden>
+    <section class="cc-player" aria-label="音源とプレーヤー" data-i18n-aria-label>
+      <button class="cc-play cc-primary" id="play" aria-label="再生" data-i18n-aria-label disabled><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path id="play-icon" d="M6 3 21 12 6 21Z"/></svg></button>
+      <span class="cc-filename" id="filename" data-i18n>音源を選択、またはここにドロップ</span>
+      <button class="cc-loop" id="loop" aria-label="ループ再生" data-i18n-aria-label aria-pressed="false" title="ループ再生：オフ" data-i18n-title><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m17 2 4 4-4 4M21 6H7a4 4 0 0 0-4 4m4 12-4-4 4-4M3 18h14a4 4 0 0 0 4-4"/></svg></button>
+      <button class="cc-change" id="change" data-i18n>音源変更</button>
+      <div class="cc-source-info" id="source-info"><span data-i18n>音声はブラウザ内で処理します</span></div>
+      <div class="cc-seek-row"><span id="position">00:00</span><input class="cc-seek" id="seek" type="range" min="0" max="0" value="0" step="0.01" aria-label="再生位置" data-i18n-aria-label disabled><span id="duration">00:00</span></div>
+      <input id="file" type="file" accept="audio/*,video/*,.opus,.ogg,.flac,.wav,.m4a,.aac,.aif,.aiff,.sbc,.lc3,.mp4,.mov,.webm,.mkv" aria-label="音声・動画ファイル" data-i18n-aria-label hidden>
     </section>
-    <section class="cc-comparison" aria-label="比較パターン">
-      <div class="cc-toolbar"><h2>比較パターン</h2><div class="cc-toolbar-actions"><button id="game-open" disabled title="基準音源と変換済みパターンのうち、同じ設定・同じPCMを除く2つ以上で遊べます">聴き分けクイズ</button><button class="cc-primary" id="add" disabled><span aria-hidden="true">＋</span>追加</button></div></div>
-      <form class="cc-editor" id="editor" aria-label="パターン設定" hidden>
-        <div class="cc-editor-heading"><h2 id="editor-title">パターンを追加</h2><button type="button" class="cc-icon" data-close aria-label="設定を閉じる">×</button></div>
+    <section class="cc-comparison" aria-label="比較パターン" data-i18n-aria-label>
+      <div class="cc-toolbar"><h2 data-i18n>比較パターン</h2><div class="cc-toolbar-actions"><button id="game-open" disabled title="基準音源と変換済みパターンのうち、同じ設定・同じPCMを除く2つ以上で遊べます" data-i18n-title data-i18n>聴き分けクイズ</button><button class="cc-primary" id="add" disabled><span aria-hidden="true">＋</span><span data-i18n>追加</span></button></div></div>
+      <form class="cc-editor" id="editor" aria-label="パターン設定" data-i18n-aria-label hidden>
+        <div class="cc-editor-heading"><h2 id="editor-title" data-i18n>パターンを追加</h2><button type="button" class="cc-icon" data-close aria-label="設定を閉じる" data-i18n-aria-label>×</button></div>
         <div class="cc-fields" id="fields"></div>
-        <div class="cc-editor-buttons"><button type="button" data-close>キャンセル</button><button type="submit" class="cc-primary">変換</button></div>
+        <div class="cc-editor-buttons"><button type="button" data-close data-i18n>キャンセル</button><button type="submit" class="cc-primary" data-i18n>変換</button></div>
       </form>
-      <div class="cc-table-head" aria-hidden="true"><span>音声・設定</span><span>サイズ</span><span>実効レート</span><span>基準PCM比 / 削減率</span><span></span></div>
-      <div class="cc-patterns" id="patterns"><p class="cc-empty">音源を選択すると比較できます。</p></div>
+      <div class="cc-table-head" aria-hidden="true"><span data-i18n>音声・設定</span><span data-i18n>サイズ</span><span data-i18n>実効レート</span><span data-i18n>基準PCM比 / 削減率</span><span></span></div>
+      <div class="cc-patterns" id="patterns"><p class="cc-empty" data-i18n>音源を選択すると比較できます。</p></div>
     </section>
     <details class="cc-graph" id="graph">
-      <summary>グラフで比較</summary>
+      <summary data-i18n>グラフで比較</summary>
       <div class="cc-graph-content">
-        <div class="cc-graph-legend"><span class="cc-graph-reference">基準PCM</span><span id="graph-selected">選択中</span></div>
+        <div class="cc-graph-legend"><span class="cc-graph-reference" data-i18n>基準PCM</span><span id="graph-selected" data-i18n>選択中</span></div>
         <div id="graph-plots" hidden>
-          <h3>周波数</h3>
-          <canvas id="frequency-canvas" role="img" aria-label="周波数スペクトル"></canvas>
-          <h3>時間×周波数の差分</h3>
-          <div class="cc-graph-time"><canvas id="graph-canvas" role="img" aria-label="時間×周波数の差分"></canvas><span id="graph-cursor" aria-hidden="true"></span></div>
+          <h3 data-i18n>周波数</h3>
+          <canvas id="frequency-canvas" role="img" aria-label="周波数スペクトル" data-i18n-aria-label></canvas>
+          <h3 data-i18n>時間×周波数の差分</h3>
+          <div class="cc-graph-time"><canvas id="graph-canvas" role="img" aria-label="時間×周波数の差分" data-i18n-aria-label></canvas><span id="graph-cursor" aria-hidden="true"></span></div>
         </div>
-        <p id="graph-status" role="status">音源を選択すると比較できます。</p>
+        <p id="graph-status" role="status" data-i18n>音源を選択すると比較できます。</p>
       </div>
     </details>
     <div class="cc-notice" id="notice" role="status" aria-live="polite" hidden></div>
-    <noscript>JavaScriptを有効にしてください。</noscript>
+    <noscript data-i18n>JavaScriptを有効にしてください。</noscript>
   </main>
   <dialog class="cc-game" id="game" aria-labelledby="game-title">
-    <header class="cc-game-header"><img src="./icon.svg" width="22" height="22" alt=""><h2 id="game-title">聴き分けクイズ</h2><button id="game-close" aria-label="聴き分けクイズを閉じる">×</button></header>
+    <header class="cc-game-header"><img src="./icon.svg" width="22" height="22" alt=""><h2 id="game-title" data-i18n>聴き分けクイズ</h2><button id="game-close" aria-label="聴き分けクイズを閉じる" data-i18n-aria-label>×</button></header>
     <div class="cc-game-content" id="game-stage"></div>
   </dialog>
 </body>

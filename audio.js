@@ -1,3 +1,4 @@
+import { t } from './i18n.js';
 import { LIMITS, CODECS, commonFilter, encodeArgs, chunkArgs, samePreview, needsPCM } from './model.js';
 import { storedPCM } from './pcm-cache.js';
 
@@ -7,7 +8,7 @@ export class Engine {
   async load() {
     if (!this.loading) this.loading = (async () => {
       const { FFmpeg } = await import('./vendor/ffmpeg/index.js');
-      if (this.closed) throw Error('処理を取り消しました。');
+      if (this.closed) throw Error(t("処理を取り消しました。"));
       this.ffmpeg = new FFmpeg();
       this.ffmpeg.on('log', ({ message }) => {
         this.logs.push(message);
@@ -26,17 +27,17 @@ export class Engine {
     if (this.blob === blob) return;
     if (this.blob) await this.ffmpeg.unmount('/input');
     this.blob = null;
-    if (!await this.ffmpeg.mount('WORKERFS', { blobs: [{ name: 'audio', data: blob }] }, '/input')) throw Error('ファイル参照の初期化に失敗しました。');
+    if (!await this.ffmpeg.mount('WORKERFS', { blobs: [{ name: 'audio', data: blob }] }, '/input')) throw Error(t("ファイル参照の初期化に失敗しました。"));
     this.blob = blob;
   }
   async run(args, probe = false) {
     this.logs = [];
     const result = await this.ffmpeg[probe ? 'ffprobe' : 'exec'](args);
     // core 0.12.10のffprobeは正常終了でも-1を返す。直後のJSON解析で出力を検証する。
-    if (result !== 0 && !(probe && result === -1)) throw Error(`音声処理に失敗しました。${this.logs.filter(s => !s.startsWith('Aborted')).slice(-3).join(' ')}`);
+    if (result !== 0 && !(probe && result === -1)) throw Error(t("音声処理に失敗しました。{0}", this.logs.filter(s => !s.startsWith('Aborted')).slice(-3).join(' ')));
   }
   async analyze(file) {
-    if (!file.size || file.size > LIMITS.input) throw Error('0バイトのファイル、または512 MiBを超える入力は扱えません。');
+    if (!file.size || file.size > LIMITS.input) throw Error(t("0バイトのファイル、または512 MiBを超える入力は扱えません。"));
     const inputOptions = /\.sbc$/i.test(file.name || '') ? ['-f', 'sbc'] : [];
     const probe = async (blob, options = []) => {
       await this.mount(blob);
@@ -46,44 +47,44 @@ export class Engine {
     };
     let streams;
     try { streams = await probe(file, inputOptions); }
-    catch { throw Error('読み込めない形式、または破損したファイルです。'); }
-    if (!streams.length) throw Error('読み込めない形式、または破損したファイルです。');
+    catch { throw Error(t("読み込めない形式、または破損したファイルです。")); }
+    if (!streams.length) throw Error(t("読み込めない形式、または破損したファイルです。"));
     const info = streams.find(stream => stream.codec_type === 'audio');
-    if (!info) throw Error('音声が含まれていません。');
+    if (!info) throw Error(t("音声が含まれていません。"));
     const rate = Number(info?.sample_rate), originalChannels = Number(info?.channels);
-    if (!Number.isInteger(rate) || rate < 8000 || rate > 192000 || !Number.isInteger(originalChannels) || originalChannels < 1) throw Error('対応する音声がありません。8～192 kHzの音源を選択してください。');
+    if (!Number.isInteger(rate) || rate < 8000 || rate > 192000 || !Number.isInteger(originalChannels) || originalChannels < 1) throw Error(t("対応する音声がありません。8～192 kHzの音源を選択してください。"));
     const source = { file, hasVideo: streams.some(stream => stream.codec_type === 'video' && !stream.disposition?.attached_pic), codec: info.codec_name, rate, channels: Math.min(2, originalChannels), originalChannels, layout: info.channel_layout || null, bits: Number(info.bits_per_raw_sample || info.bits_per_sample) || null };
     const pcm = await this.preparePCM(source, { reference: true, blob: file, channels: source.channels });
     let frames = 0;
     if (pcm) {
       const saved = (await probe(pcm)).find(stream => stream.codec_type === 'audio');
-      if (saved?.time_base !== `1/${rate}`) throw Error('一時PCMのサンプル数を取得できませんでした。');
+      if (saved?.time_base !== `1/${rate}`) throw Error(t("一時PCMのサンプル数を取得できませんでした。"));
       frames = Number(saved.duration_ts);
     } else {
       await this.mount(file);
       this.onLog = message => { const match = message.match(/\bnb_samples:(\d+)/); if (match) frames += Number(match[1]); };
       try { await this.run(['-v', 'info', ...inputOptions, '-i', '/input/audio', '-map', '0:a:0', '-vn', '-af', 'ashowinfo', '-f', 'null', '-']); }
-      catch { throw Error('読み込めない形式、または破損したファイルです。'); }
+      catch { throw Error(t("読み込めない形式、または破損したファイルです。")); }
       finally { this.onLog = null; }
     }
-    if (!Number.isSafeInteger(frames) || frames <= 0) throw Error('音声サンプルを読み取れませんでした。');
+    if (!Number.isSafeInteger(frames) || frames <= 0) throw Error(t("音声サンプルを読み取れませんでした。"));
     Object.assign(source, { frames, duration: frames / rate });
     return source;
   }
   async encode(source, config) {
     const codec = CODECS[config.codec], path = `/output.${codec.ext}`;
     const frames = Math.ceil(source.duration * config.rate);
-    if (config.codec === 'lc3' && (!Number.isSafeInteger(frames) || frames < 1 || frames > 0xffffffff)) throw Error('この音源はLC3のサンプル数上限を超えます。');
-    if (config.codec === 'wav' && source.duration * config.rate * config.channels * config.depth / 8 >= LIMITS.output - 65536) throw Error('この設定の出力は512 MiBを超えます。サンプルレートやビット深度を下げてください。');
+    if (config.codec === 'lc3' && (!Number.isSafeInteger(frames) || frames < 1 || frames > 0xffffffff)) throw Error(t("この音源はLC3のサンプル数上限を超えます。"));
+    if (config.codec === 'wav' && source.duration * config.rate * config.channels * config.depth / 8 >= LIMITS.output - 65536) throw Error(t("この設定の出力は512 MiBを超えます。サンプルレートやビット深度を下げてください。"));
     const pcm = source.hasVideo ? await this.preparePCM(source, { reference: true, blob: source.file, channels: source.channels }) : null;
-    if (this.closed) throw Error('処理を取り消しました。');
+    if (this.closed) throw Error(t("処理を取り消しました。"));
     await this.mount(pcm || source.file);
     try {
       await this.run(encodeArgs(source, config, '/input/audio', path, Boolean(pcm)));
       const data = await this.ffmpeg.readFile(path);
-      if (data.length >= LIMITS.output - 65536) throw Error('出力上限の512 MiBに達したため、生成を取り消しました。');
+      if (data.length >= LIMITS.output - 65536) throw Error(t("出力上限の512 MiBに達したため、生成を取り消しました。"));
       if (config.codec === 'lc3') {
-        if (data.length < 18 || new DataView(data.buffer, data.byteOffset, data.byteLength).getUint16(0) !== 0x1ccc) throw Error('LC3の出力ヘッダーが不正です。');
+        if (data.length < 18 || new DataView(data.buffer, data.byteOffset, data.byteLength).getUint16(0) !== 0x1ccc) throw Error(t("LC3の出力ヘッダーが不正です。"));
         new DataView(data.buffer, data.byteOffset, data.byteLength).setUint32(14, frames, true);
       }
       const blob = new Blob([data], { type: codec.mime });
@@ -92,7 +93,7 @@ export class Engine {
     } finally { await this.ffmpeg.deleteFile(path).catch(() => {}); }
   }
   async preparePCM(source, target) {
-    if (this.closed) throw Error('処理を取り消しました。');
+    if (this.closed) throw Error(t("処理を取り消しました。"));
     if (!needsPCM(source, target)) return null;
     const rate = target.reference ? source.rate : target.rate;
     // リサンプルの末尾を変えないよう、符号化時のパディングも残す。
@@ -102,7 +103,7 @@ export class Engine {
       const progress = this.onProgress;
       this.onProgress = null;
       try {
-        if (!await this.ffmpeg.mount('PCM', { file, limit: LIMITS.output }, '/preview')) throw Error('一時PCMの保存を開始できません。');
+        if (!await this.ffmpeg.mount('PCM', { file, limit: LIMITS.output }, '/preview')) throw Error(t("一時PCMの保存を開始できません。"));
         const args = chunkArgs(source, target, 0, frames, rate, '/input/audio', '/preview/audio.wav');
         args[args.length - 2] = 'wav';
         await this.run(args);
@@ -111,14 +112,14 @@ export class Engine {
   }
   async decode(source, target, start, frames, context) {
     const pcm = await this.preparePCM(source, target);
-    if (this.closed) throw Error('処理を取り消しました。');
+    if (this.closed) throw Error(t("処理を取り消しました。"));
     await this.mount(pcm || target.blob);
     try {
       await this.run(chunkArgs(source, pcm ? { codec: 'wav', channels: target.channels } : target, start, frames, context.sampleRate));
       const data = await this.ffmpeg.readFile('/chunk.f32');
       const samples = new Float32Array(data.buffer, data.byteOffset, data.byteLength / 4);
       const received = samples.length / target.channels;
-      if (received < frames - 2) throw Error('必要な再生区間を復号できませんでした。この音源では正確な区間再生に対応できません。');
+      if (received < frames - 2) throw Error(t("必要な再生区間を復号できませんでした。この音源では正確な区間再生に対応できません。"));
       const buffer = context.createBuffer(target.channels, frames, context.sampleRate);
       for (let ch = 0; ch < target.channels; ch++) {
         const out = buffer.getChannelData(ch);
